@@ -1,36 +1,89 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Chamada UTFPR
 
-## Getting Started
+Aplicação web para registrar presença em chamadas da UTFPR a partir da leitura de um QR code pelo celular ou computador.
 
-First, run the development server:
+O projeto foi pensado para simplificar o processo de chamada: o usuário faz login com suas credenciais, aponta a câmera para o QR code exibido pelo professor e o app envia os dados para o endpoint da chamada automaticamente.
+
+## O que o projeto faz
+
+O fluxo principal da aplicação é:
+
+1. o usuário informa `username` e `senha`;
+2. as credenciais são criptografadas no servidor e armazenadas localmente no navegador;
+3. o app abre a câmera e lê o QR code da chamada;
+4. o QR code é interpretado para extrair o `idChamada`;
+5. a aplicação consulta o nome da chamada;
+6. ao tocar em `Registrar Presença`, o app envia os dados necessários para o endpoint da chamada.
+
+## Funcionalidades
+
+- Login local com persistência da sessão no navegador.
+- Criptografia das credenciais antes de salvar no `localStorage`.
+- Leitura de QR code usando a câmera do dispositivo.
+- Identificação do nome da chamada a partir da URL escaneada.
+- Envio da presença diretamente para o endpoint da chamada.
+- Interface otimizada para celular.
+- Suporte a instalação como PWA.
+
+## Como funciona por dentro
+
+O frontend foi construído com Next.js e roda inteiramente no navegador do usuário, mas algumas ações sensíveis passam por rotas de API internas:
+
+- `src/app/api/local-auth/route.ts`: criptografa e descriptografa as credenciais.
+- `src/app/api/chamada-label/route.ts`: tenta descobrir o nome da chamada a partir da URL lida no QR code.
+- `src/app/api/register-presence/route.ts`: recebe a URL da chamada e as credenciais criptografadas, descriptografa os dados no servidor e envia o POST para registrar a presença.
+
+## Tecnologias
+
+- Next.js 15
+- React 19
+- TypeScript
+- Tailwind CSS 4
+- `qr-scanner`
+- PWA com Service Worker
+
+## Configuração
+
+Crie um arquivo `.env` com base no `.env.example`:
+
+```bash
+cp .env.example .env
+```
+
+Defina a variável abaixo com um valor longo e secreto:
+
+```env
+LOCAL_STORAGE_ENCRYPTION_KEY=sua-chave-secreta-aqui
+```
+
+Essa chave é usada para derivar a chave de criptografia das credenciais que ficam salvas localmente no navegador.
+
+## Como rodar localmente
+
+Instale as dependências:
+
+```bash
+npm install
+```
+
+Inicie o projeto em modo de desenvolvimento:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Depois, abra [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Scripts disponíveis
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `npm run dev`: inicia o ambiente de desenvolvimento com Turbopack.
+- `npm run build`: gera a build de produção.
+- `npm run start`: inicia a aplicação em produção.
+- `npm run lint`: executa o ESLint.
+- `npm run generate-icons`: gera os ícones do app.
 
-## Learn More
+## Observações
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- O app depende de permissão de câmera para ler os QR codes.
+- As credenciais não são armazenadas em texto puro no navegador, mas ainda assim este é um projeto que lida com dados sensíveis e deve ser usado com cuidado.
+- Para melhor experiência no celular, o app pode ser instalado como aplicativo.
