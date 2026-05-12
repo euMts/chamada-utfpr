@@ -6,8 +6,7 @@
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
-    "lint": "eslint",
-    "generate-icons": "node scripts/generate-icons.js"
+    "lint": "eslint"
   },
   "dependencies": {
     "next": "^15.5.18",
