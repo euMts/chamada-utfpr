@@ -161,7 +161,7 @@ export default function LocalAuthGate({ children }: LocalAuthGateProps) {
         <div className="space-y-4">
           <div>
             <label htmlFor="username" className="mb-2 block text-sm font-semibold text-slate-800">
-              Usuário
+              Usuário do Moodle
             </label>
             <input
               type="text"
@@ -177,7 +177,7 @@ export default function LocalAuthGate({ children }: LocalAuthGateProps) {
 
           <div>
             <label htmlFor="senha" className="mb-2 block text-sm font-semibold text-slate-800">
-              Senha
+              Senha do Moodle
             </label>
             <input
               type="password"
