@@ -24,13 +24,7 @@ export default function PWAInstaller() {
 
     // Registrar service worker
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js')
-        .then((registration) => {
-          console.log('Service Worker registrado com sucesso:', registration);
-        })
-        .catch((error) => {
-          console.log('Falha ao registrar Service Worker:', error);
-        });
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
 
     // Detectar evento de instalação
@@ -56,13 +50,7 @@ export default function PWAInstaller() {
   const handleInstallClick = async () => {
     if (deferredPrompt) {
       await deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      
-      if (outcome === 'accepted') {
-        console.log('PWA instalado pelo usuário');
-      } else {
-        console.log('PWA não instalado pelo usuário');
-      }
+      await deferredPrompt.userChoice;
       
       setDeferredPrompt(null);
       setShowInstallButton(false);

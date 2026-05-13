@@ -4,10 +4,6 @@ import QRReader from './components/QRReader';
 import PWAInstaller from './components/PWAInstaller';
 
 export default function Home() {
-  const handleQRResult = (result: string) => {
-    console.log('QR Code detectado:', result);
-  };
-
   return (
     <main className="min-h-dvh bg-gray-100 px-4 pb-6 pt-[max(1.25rem,env(safe-area-inset-top))]">
       <div className="mx-auto flex w-full max-w-md flex-col gap-3">
@@ -21,7 +17,7 @@ export default function Home() {
         </div>
         
         <LocalAuthGate>
-          <QRReader onResult={handleQRResult} />
+          <QRReader />
         </LocalAuthGate>
       </div>
       

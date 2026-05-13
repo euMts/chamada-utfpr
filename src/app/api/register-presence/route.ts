@@ -1,6 +1,5 @@
 import { createDecipheriv, createHash } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { resolveCallLabel } from "../_lib/call-label-debug";
 
 const ALGORITHM = "aes-256-gcm";
 
@@ -72,28 +71,6 @@ export async function POST(request: NextRequest) {
       senha: credentials.senha,
       idChamada,
     };
-
-    const isDebug = process.env.NEXT_PUBLIC_DEBUG === "true";
-
-    if (isDebug) {
-      const callNameResult = await resolveCallLabel(originalUrl);
-      const debug = {
-        mode: "console-log",
-        originalUrl,
-        targetUrl: url.toString(),
-        payload,
-        callName: callNameResult.label ?? "Não encontrado",
-        callNameDebug: callNameResult.debug,
-      };
-
-      console.log("[register-presence] modo temporario de log:", debug);
-      console.log(
-        "[register-presence] callNameDebug (json):",
-        JSON.stringify(callNameResult.debug, null, 2),
-      );
-
-      return NextResponse.json({ ok: true, debug });
-    }
 
     const response = await fetch(url, {
       method: "POST",

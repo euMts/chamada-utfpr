@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     const result = await resolveCallLabel(url.toString());
 
     return NextResponse.json({
-      label: result.label ?? "Não encontrado",
+      label: result.label,
       debug: result.debug,
     });
   } catch {

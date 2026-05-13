@@ -1,18 +1,13 @@
+import { execFile } from "child_process";
+import { promisify } from "util";
 import { NextResponse } from "next/server";
 import { extractCallNameFromRegistrarPageHtml } from "@/lib/extract-call-name-from-html";
 
-interface PortalResponse {
-  portal?: {
-    name?: unknown;
-  };
-}
-
 export interface LabelDebugInfo {
-  source: "registrar-api" | "html-label" | "error";
+  source: "html-label" | "error";
   requestedUrl: string;
   idChamada: string | null;
   searchedHtmlInfo: string[];
-  portalLookupUrl?: string;
   matchedLabelHtml?: string | null;
   extractedText?: string | null;
   fetchedHtml?: string | null;
@@ -28,55 +23,43 @@ export interface LabelLookupResult {
 
 const BROWSER_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
+const execFileAsync = promisify(execFile);
 
-async function getLabelFromRegistrarUrl(url: URL): Promise<LabelLookupResult> {
-  const idChamada = url.searchParams.get("idChamada");
-  const portalUrl = idChamada
-    ? new URL(`/api/portals/${encodeURIComponent(idChamada)}`, url.origin)
-    : null;
-
-  const debug: LabelDebugInfo = {
-    source: "registrar-api",
-    requestedUrl: url.toString(),
-    idChamada,
-    searchedHtmlInfo: [
-      "Nenhum campo do HTML foi buscado para esta URL.",
-      "Quando o caminho termina com /registrar, o nome vem do endpoint /api/portals/:idChamada no mesmo host.",
+async function fetchHtmlWithCurl(url: URL) {
+  const { stdout } = await execFileAsync(
+    "curl",
+    [
+      "--silent",
+      "--show-error",
+      "--location",
+      "--max-time",
+      "8",
+      "--user-agent",
+      BROWSER_USER_AGENT,
+      "--write-out",
+      "\n%{http_code}",
+      url.toString(),
     ],
-    portalLookupUrl: portalUrl?.toString(),
-  };
+    {
+      maxBuffer: 1024 * 1024 * 4,
+    },
+  );
 
-  if (!idChamada || !portalUrl) {
-    return { label: null, debug };
-  }
-
-  const response = await fetch(portalUrl, { cache: "no-store" });
-
-  if (!response.ok) {
-    return { label: null, debug };
-  }
-
-  const data = (await response.json()) as PortalResponse;
-  const name = data.portal?.name;
+  const separatorIndex = stdout.lastIndexOf("\n");
+  const html = separatorIndex >= 0 ? stdout.slice(0, separatorIndex) : stdout;
+  const status = separatorIndex >= 0 ? Number(stdout.slice(separatorIndex + 1)) : 0;
 
   return {
-    label: typeof name === "string" && name.trim() ? name.trim() : null,
-    debug,
+    html,
+    status,
+    statusText: status ? "OK" : "",
   };
 }
 
 async function getLabelFromHtmlUrl(url: URL): Promise<LabelLookupResult> {
   try {
-    const response = await fetch(url, {
-      cache: "no-store",
-      signal: AbortSignal.timeout(30000),
-      headers: {
-        Accept: "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
-        "User-Agent": BROWSER_USER_AGENT,
-      },
-    });
-    const html = await response.text();
-    const { matchedLabelHtml, extractedText } = extractCallNameFromRegistrarPageHtml(html);
+    const response = await fetchHtmlWithCurl(url);
+    const { matchedLabelHtml, extractedText } = extractCallNameFromRegistrarPageHtml(response.html);
 
     return {
       label: extractedText,
@@ -85,17 +68,18 @@ async function getLabelFromHtmlUrl(url: URL): Promise<LabelLookupResult> {
         requestedUrl: url.toString(),
         idChamada: url.searchParams.get("idChamada"),
         searchedHtmlInfo: [
-          "Foi feito um GET na propria URL da chamada para inspecionar o HTML retornado.",
-          "Foi buscado o conteúdo dentro da tag <body> da página.",
-          "Foram listados todos os <label>; ignoram-se sr-only e textos curtos tipo Usuário/Senha.",
-          "Prioriza-se <label class=\"display-5\"> (nome da disciplina) e equivalentes.",
+          "Foi feito um GET na URL completa da chamada usando curl.",
+          "Foi lido o HTML retornado.",
+          "Foi extraido o conteudo da primeira tag <label> dentro do <body>.",
         ],
         matchedLabelHtml,
         extractedText,
-        fetchedHtml: html,
+        fetchedHtml: response.html,
         fetchStatus: response.status,
         fetchStatusText: response.statusText,
-        errorMessage: response.ok ? null : `Resposta HTTP nao OK: ${response.status} ${response.statusText}`,
+        errorMessage: response.status >= 200 && response.status < 300
+          ? null
+          : `Resposta HTTP nao OK: ${response.status}`,
       },
     };
   } catch (error) {
@@ -106,7 +90,7 @@ async function getLabelFromHtmlUrl(url: URL): Promise<LabelLookupResult> {
         requestedUrl: url.toString(),
         idChamada: url.searchParams.get("idChamada"),
         searchedHtmlInfo: [
-          "Foi tentado fazer GET na propria URL da chamada para buscar o nome no HTML.",
+          "Foi tentado fazer GET na propria URL da chamada usando curl.",
           "A requisicao falhou antes que o HTML pudesse ser analisado.",
         ],
         fetchedHtml: null,
@@ -125,16 +109,14 @@ export async function resolveCallLabel(targetUrl: string): Promise<LabelLookupRe
     throw new Error("Protocolo nao permitido.");
   }
 
-  return url.pathname.endsWith("/registrar")
-    ? getLabelFromRegistrarUrl(url)
-    : getLabelFromHtmlUrl(url);
+  return getLabelFromHtmlUrl(url);
 }
 
 export function buildCallLabelErrorResponse(targetUrl: string) {
   const url = new URL(targetUrl);
 
   return NextResponse.json({
-    label: "Não encontrado",
+    label: null,
     debug: {
       source: "error",
       requestedUrl: url.toString(),

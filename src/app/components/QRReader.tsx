@@ -3,14 +3,11 @@
 import { useEffect, useRef, useState } from 'react';
 import QrScanner from 'qr-scanner';
 import { ArrowLeftIcon, CameraIcon, CheckIcon, RotateCwIcon, SendIcon, StopIcon } from './Icons';
-import { extractCallNameFromRegistrarPageHtml } from '@/lib/extract-call-name-from-html';
 import { useLocalAuth } from './LocalAuthGate';
 
 interface QRReaderProps {
   onResult?: (result: string) => void;
 }
-
-const IS_DEBUG = process.env.NEXT_PUBLIC_DEBUG === 'true';
 
 interface DetectedQRCode {
   id: string;
@@ -18,15 +15,15 @@ interface DetectedQRCode {
   originalUrl: string;
   callName: string | null;
   callNameDebug: CallNameDebugInfo | null;
+  callNameError: string | null;
   isLoadingCallName: boolean;
 }
 
 interface CallNameDebugInfo {
-  source: 'registrar-api' | 'html-label' | 'browser-fallback' | 'error';
+  source: 'html-label' | 'error';
   requestedUrl: string;
   idChamada: string | null;
   searchedHtmlInfo: string[];
-  portalLookupUrl?: string;
   matchedLabelHtml?: string | null;
   extractedText?: string | null;
   fetchedHtml?: string | null;
@@ -40,19 +37,9 @@ interface CallNameResponse {
   debug?: CallNameDebugInfo;
 }
 
-interface RegisterLogResponse {
+interface RegisterPresenceResponse {
   ok?: boolean;
   error?: string;
-  debug?: {
-    mode: string;
-    originalUrl: string;
-    targetUrl: string;
-    payload: {
-      username: string;
-      senha: string;
-      idChamada: string;
-    };
-  };
 }
 
 function parseQRCodeContent(content: string): DetectedQRCode | null {
@@ -70,6 +57,7 @@ function parseQRCodeContent(content: string): DetectedQRCode | null {
       originalUrl: url.toString(),
       callName: null,
       callNameDebug: null,
+      callNameError: null,
       isLoadingCallName: true,
     };
   } catch {
@@ -91,65 +79,9 @@ export default function QRReader({ onResult }: QRReaderProps) {
   const [registrationSucceeded, setRegistrationSucceeded] = useState(false);
 
   const loadCallName = async (qrCode: DetectedQRCode) => {
-    const labelLooksMissing = (label: string | undefined) =>
-      !label ||
-      label === 'Não encontrado' ||
-      label === 'Nome da chamada não encontrado';
-
-    const tryBrowserFallback = async (): Promise<CallNameResponse | null> => {
-      try {
-        const controller = new AbortController();
-        const timeoutId = window.setTimeout(() => controller.abort(), 25000);
-        const res = await fetch(qrCode.originalUrl, {
-          mode: 'cors',
-          credentials: 'omit',
-          signal: controller.signal,
-        });
-        window.clearTimeout(timeoutId);
-        if (!res.ok) {
-          return null;
-        }
-        const html = await res.text();
-        const { extractedText, matchedLabelHtml } = extractCallNameFromRegistrarPageHtml(html);
-        if (!extractedText) {
-          return null;
-        }
-        return {
-          label: extractedText,
-          debug: {
-            source: 'browser-fallback',
-            requestedUrl: qrCode.originalUrl,
-            idChamada: qrCode.id,
-            searchedHtmlInfo: [
-              'A API /api/chamada-label não retornou um nome utilizável.',
-              'Foi feito fetch direto no navegador para a URL do QR (quando CORS permite).',
-              'Mesma heurística do servidor: vários <label>, ignorando sr-only e Usuário/Senha; prioriza display-5.',
-            ],
-            matchedLabelHtml,
-            extractedText,
-            fetchedHtml: html,
-            fetchStatus: res.status,
-            fetchStatusText: res.statusText,
-            errorMessage: null,
-          },
-        };
-      } catch {
-        return null;
-      }
-    };
-
     try {
       const response = await fetch(`/api/chamada-label?url=${encodeURIComponent(qrCode.originalUrl)}`);
       const data = (await response.json()) as CallNameResponse;
-
-      let resolved: CallNameResponse = data;
-
-      if (labelLooksMissing(data.label) || data.debug?.source === 'error') {
-        const fallback = await tryBrowserFallback();
-        if (fallback?.label && !labelLooksMissing(fallback.label)) {
-          resolved = fallback;
-        }
-      }
 
       setDetectedQRCode((current) => {
         if (!current || current.originalUrl !== qrCode.originalUrl) {
@@ -158,17 +90,14 @@ export default function QRReader({ onResult }: QRReaderProps) {
 
         return {
           ...current,
-          callName: resolved.label ?? 'Nome da chamada não encontrado',
-          callNameDebug: resolved.debug ?? null,
+          callName: data.label?.trim() || null,
+          callNameDebug: data.debug ?? null,
+          callNameError: data.label?.trim()
+            ? null
+            : data.debug?.errorMessage ?? 'Nenhuma tag <label> foi encontrada no HTML retornado.',
           isLoadingCallName: false,
         };
       });
-
-      console.groupCollapsed('[chamada-label] Busca do nome da chamada');
-      console.log('URL analisada:', qrCode.originalUrl);
-      console.log('Nome encontrado:', resolved.label ?? 'Nome da chamada não encontrado');
-      console.log('Detalhes da busca:', resolved.debug ?? null);
-      console.groupEnd();
     } catch {
       setDetectedQRCode((current) => {
         if (!current || current.originalUrl !== qrCode.originalUrl) {
@@ -177,13 +106,12 @@ export default function QRReader({ onResult }: QRReaderProps) {
 
         return {
           ...current,
-          callName: 'Não foi possível carregar o nome da chamada',
+          callName: null,
           callNameDebug: null,
+          callNameError: 'Não foi possível carregar o HTML da chamada.',
           isLoadingCallName: false,
         };
       });
-
-      console.error('[chamada-label] Não foi possível carregar os detalhes do nome da chamada.');
     }
   };
 
@@ -238,9 +166,8 @@ export default function QRReader({ onResult }: QRReaderProps) {
 
       await qrScannerRef.current.start();
       
-    } catch (err) {
+    } catch {
       setError('Erro ao iniciar a câmera. Verifique as permissões.');
-      console.error('Erro ao iniciar QR Scanner:', err);
     }
   };
 
@@ -289,9 +216,7 @@ export default function QRReader({ onResult }: QRReaderProps) {
     setIsRegisteringPresence(true);
     setRegistrationError(null);
 
-    const fallbackErrorMessage = IS_DEBUG
-      ? 'Não foi possível registrar log.'
-      : 'Não foi possível registrar presença.';
+    const fallbackErrorMessage = 'Não foi possível registrar presença.';
 
     try {
       const response = await fetch('/api/register-presence', {
@@ -304,20 +229,10 @@ export default function QRReader({ onResult }: QRReaderProps) {
           encryptedCredentials,
         }),
       });
-      const data = (await response.json().catch(() => null)) as RegisterLogResponse | null;
+      const data = (await response.json().catch(() => null)) as RegisterPresenceResponse | null;
 
       if (!response.ok) {
         throw new Error(data?.error ?? fallbackErrorMessage);
-      }
-
-      if (IS_DEBUG) {
-        console.groupCollapsed('[register-log] Dados da chamada');
-        console.log('Destino do POST:', data?.debug?.targetUrl ?? detectedQRCode.siteUrl);
-        console.log('Payload que seria enviado:', data?.debug?.payload ?? null);
-        console.log('URL original do QR Code:', detectedQRCode.originalUrl);
-        console.log('Nome da chamada resolvido:', detectedQRCode.callName);
-        console.log('Dados usados para informar o nome da chamada:', detectedQRCode.callNameDebug);
-        console.groupEnd();
       }
 
       setRegistrationSucceeded(true);
@@ -403,12 +318,10 @@ export default function QRReader({ onResult }: QRReaderProps) {
                 <CheckIcon className="h-7 w-7" />
               </div>
               <h3 className="text-xl font-bold text-emerald-950">
-                {IS_DEBUG ? 'Log registrado' : 'Presença registrada'}
+                Presença registrada
               </h3>
               <p className="mt-2 text-sm leading-6 text-emerald-800">
-                {IS_DEBUG
-                  ? 'Os dados foram exibidos no console do navegador.'
-                  : 'Sua presença foi enviada com sucesso.'}
+                Sua presença foi enviada com sucesso.
               </p>
             </div>
             <button
@@ -439,8 +352,15 @@ export default function QRReader({ onResult }: QRReaderProps) {
               <div className="space-y-1">
                 <p className="text-[0.7rem] font-bold uppercase text-slate-500">Chamada</p>
                 <p className="break-words text-base font-bold leading-6 text-slate-950">
-                  {detectedQRCode.isLoadingCallName ? 'Carregando nome da chamada...' : detectedQRCode.callName}
+                  {detectedQRCode.isLoadingCallName
+                    ? 'Carregando nome da chamada...'
+                    : detectedQRCode.callName ?? 'Nome indisponível'}
                 </p>
+                {!detectedQRCode.isLoadingCallName && detectedQRCode.callNameError && (
+                  <p className="text-xs font-semibold leading-5 text-red-700">
+                    {detectedQRCode.callNameError}
+                  </p>
+                )}
               </div>
             </div>
             <p className="mt-3 text-xs font-semibold text-green-700">
@@ -457,13 +377,7 @@ export default function QRReader({ onResult }: QRReaderProps) {
               className="mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-md bg-green-600 px-4 text-sm font-bold text-white shadow-sm transition duration-200 hover:bg-green-700 hover:scale-[1.01] active:scale-[0.98]"
             >
               <SendIcon className="h-5 w-5" />
-              {isRegisteringPresence
-                ? IS_DEBUG
-                  ? 'Gerando log...'
-                  : 'Registrando...'
-                : IS_DEBUG
-                  ? 'Registrar Log'
-                  : 'Registrar Presença'}
+              {isRegisteringPresence ? 'Registrando...' : 'Registrar Presença'}
             </button>
             <button
               onClick={scanAgain}
