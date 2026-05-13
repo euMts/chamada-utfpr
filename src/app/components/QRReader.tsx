@@ -43,6 +43,29 @@ interface RegisterPresenceResponse {
   error?: string;
 }
 
+interface ZoomCapableMediaTrackCapabilities extends MediaTrackCapabilities {
+  zoom?: {
+    min?: number;
+    max?: number;
+    step?: number;
+  };
+}
+
+interface ZoomCapableMediaTrackSettings extends MediaTrackSettings {
+  zoom?: number;
+}
+
+interface ZoomCapableMediaTrackConstraintSet extends MediaTrackConstraintSet {
+  zoom?: number;
+}
+
+interface CameraZoomState {
+  min: number;
+  max: number;
+  step: number;
+  value: number;
+}
+
 function parseQRCodeContent(content: string): DetectedQRCode | null {
   try {
     const url = new URL(content);
@@ -78,6 +101,58 @@ export default function QRReader({ onResult }: QRReaderProps) {
   const [isRegisteringPresence, setIsRegisteringPresence] = useState(false);
   const [registrationError, setRegistrationError] = useState<string | null>(null);
   const [registrationSucceeded, setRegistrationSucceeded] = useState(false);
+  const [cameraZoom, setCameraZoom] = useState<CameraZoomState | null>(null);
+
+  const getCameraTrack = () => {
+    const stream = videoRef.current?.srcObject;
+
+    if (!(stream instanceof MediaStream)) {
+      return null;
+    }
+
+    return stream.getVideoTracks()[0] ?? null;
+  };
+
+  const loadCameraZoom = () => {
+    const track = getCameraTrack();
+
+    if (!track) {
+      setCameraZoom(null);
+      return;
+    }
+
+    const capabilities = track.getCapabilities() as ZoomCapableMediaTrackCapabilities;
+    const zoom = capabilities.zoom;
+
+    if (!zoom?.min || !zoom.max || zoom.max <= zoom.min) {
+      setCameraZoom(null);
+      return;
+    }
+
+    const settings = track.getSettings() as ZoomCapableMediaTrackSettings;
+
+    setCameraZoom({
+      min: zoom.min,
+      max: zoom.max,
+      step: zoom.step || 0.1,
+      value: settings.zoom ?? zoom.min,
+    });
+  };
+
+  const applyCameraZoom = async (value: number) => {
+    const track = getCameraTrack();
+
+    if (!track || !cameraZoom) {
+      return;
+    }
+
+    const zoom = Math.min(cameraZoom.max, Math.max(cameraZoom.min, value));
+    setCameraZoom({ ...cameraZoom, value: zoom });
+
+    await track.applyConstraints({
+      advanced: [{ zoom } as ZoomCapableMediaTrackConstraintSet],
+    });
+  };
 
   const loadCallName = async (qrCode: DetectedQRCode) => {
     try {
@@ -128,6 +203,7 @@ export default function QRReader({ onResult }: QRReaderProps) {
       setError(null);
       setRegistrationError(null);
       setRegistrationSucceeded(false);
+      setCameraZoom(null);
       setIsScanning(true);
       setDetectedQRCode(null);
       lastContentRef.current = null;
@@ -158,6 +234,7 @@ export default function QRReader({ onResult }: QRReaderProps) {
           }
 
           setIsScanning(false);
+          setCameraZoom(null);
         },
         {
           highlightScanRegion: true,
@@ -166,6 +243,7 @@ export default function QRReader({ onResult }: QRReaderProps) {
       );
 
       await qrScannerRef.current.start();
+      loadCameraZoom();
       
     } catch {
       setError('Erro ao iniciar a câmera. Verifique as permissões.');
@@ -183,6 +261,7 @@ export default function QRReader({ onResult }: QRReaderProps) {
     setDetectedQRCode(null);
     setRegistrationError(null);
     setRegistrationSucceeded(false);
+    setCameraZoom(null);
     lastContentRef.current = null;
   };
 
@@ -290,7 +369,31 @@ export default function QRReader({ onResult }: QRReaderProps) {
 
             {/* Controls */}
             {isScanning && (
-              <div className="bg-slate-50 p-3">
+              <div className="space-y-3 bg-slate-50 p-3">
+                {cameraZoom && (
+                  <div className="rounded-md border border-slate-200 bg-white p-3">
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <label htmlFor="camera-zoom" className="text-sm font-bold text-slate-800">
+                        Zoom da câmera
+                      </label>
+                      <span className="text-xs font-semibold text-slate-500">
+                        {cameraZoom.value.toFixed(1)}x
+                      </span>
+                    </div>
+                    <input
+                      id="camera-zoom"
+                      type="range"
+                      min={cameraZoom.min}
+                      max={cameraZoom.max}
+                      step={cameraZoom.step}
+                      value={cameraZoom.value}
+                      onChange={(event) => {
+                        void applyCameraZoom(Number(event.target.value));
+                      }}
+                      className="w-full accent-green-600"
+                    />
+                  </div>
+                )}
                 <div className="flex gap-2 justify-center">
                   <button
                     onClick={stopScanning}
