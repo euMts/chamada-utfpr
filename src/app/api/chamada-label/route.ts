@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { buildCallLabelErrorResponse, resolveCallLabel } from "../_lib/call-label-debug";
+import { logApiError } from "../_lib/error-utils";
 
 export async function GET(request: NextRequest) {
   const targetUrl = request.nextUrl.searchParams.get("url");
@@ -26,8 +27,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       label: result.label,
       debug: result.debug,
+      error: result.label ? null : "Não foi possível encontrar o nome da chamada.",
     });
   } catch {
+    logApiError("chamada-label:route", "Falha inesperada ao resolver chamada.", {
+      url: url.toString(),
+    });
+
     return buildCallLabelErrorResponse(url.toString());
   }
 }

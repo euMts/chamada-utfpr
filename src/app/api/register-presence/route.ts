@@ -1,5 +1,6 @@
 import { createDecipheriv, createHash } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { getErrorMessage, logApiError } from "../_lib/error-utils";
 
 const ALGORITHM = "aes-256-gcm";
 
@@ -82,17 +83,24 @@ export async function POST(request: NextRequest) {
 
     if (!response.ok) {
       const message = await response.text().catch(() => "");
+      logApiError("register-presence:remote", message || `HTTP ${response.status}`, {
+        targetUrl: url.toString(),
+        status: response.status,
+        idChamada,
+      });
 
       return NextResponse.json(
-        { error: message || "Nao foi possivel registrar presenca." },
+        { error: message || "Não foi possível registrar presença." },
         { status: response.status },
       );
     }
 
     return NextResponse.json({ ok: true });
-  } catch {
+  } catch (error) {
+    logApiError("register-presence:route", error);
+
     return NextResponse.json(
-      { error: "Nao foi possivel registrar presenca." },
+      { error: "Não foi possível registrar presença.", cause: getErrorMessage(error) },
       { status: 500 },
     );
   }

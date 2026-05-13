@@ -2,6 +2,7 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import { NextResponse } from "next/server";
 import { extractCallNameFromRegistrarPageHtml } from "@/lib/extract-call-name-from-html";
+import { getErrorMessage, logApiError } from "./error-utils";
 
 export interface LabelDebugInfo {
   source: "html-label" | "error";
@@ -23,15 +24,20 @@ export interface LabelLookupResult {
 
 const BROWSER_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
+const UTFPR_HOST = "lds.td.utfpr.edu.br";
 const execFileAsync = promisify(execFile);
 
 async function fetchHtmlWithCurl(url: URL) {
+  const allowUtfprCertificate = url.hostname === UTFPR_HOST && url.protocol === "https:";
+  const tlsArgs = allowUtfprCertificate ? ["--insecure"] : [];
+
   const { stdout } = await execFileAsync(
     "curl",
     [
       "--silent",
       "--show-error",
       "--location",
+      ...tlsArgs,
       "--max-time",
       "8",
       "--user-agent",
@@ -53,6 +59,7 @@ async function fetchHtmlWithCurl(url: URL) {
     html,
     status,
     statusText: status ? "OK" : "",
+    tlsVerificationRelaxed: allowUtfprCertificate,
   };
 }
 
@@ -71,6 +78,9 @@ async function getLabelFromHtmlUrl(url: URL): Promise<LabelLookupResult> {
           "Foi feito um GET na URL completa da chamada usando curl.",
           "Foi lido o HTML retornado.",
           "Foi extraido o conteudo da primeira tag <label> dentro do <body>.",
+          response.tlsVerificationRelaxed
+            ? "A verificacao TLS do curl foi flexibilizada apenas para o dominio lds.td.utfpr.edu.br."
+            : "A verificacao TLS padrao do curl foi mantida.",
         ],
         matchedLabelHtml,
         extractedText,
@@ -83,6 +93,11 @@ async function getLabelFromHtmlUrl(url: URL): Promise<LabelLookupResult> {
       },
     };
   } catch (error) {
+    logApiError("chamada-label:curl", error, {
+      url: url.toString(),
+      idChamada: url.searchParams.get("idChamada"),
+    });
+
     return {
       label: null,
       debug: {
@@ -96,7 +111,7 @@ async function getLabelFromHtmlUrl(url: URL): Promise<LabelLookupResult> {
         fetchedHtml: null,
         fetchStatus: null,
         fetchStatusText: null,
-        errorMessage: error instanceof Error ? `${error.name}: ${error.message}` : "Erro desconhecido ao buscar HTML.",
+        errorMessage: getErrorMessage(error),
       },
     };
   }
@@ -124,5 +139,6 @@ export function buildCallLabelErrorResponse(targetUrl: string) {
       searchedHtmlInfo: ["Nao foi possivel concluir a busca do nome da chamada."],
       errorMessage: "Falha inesperada ao montar a resposta de debug.",
     } satisfies LabelDebugInfo,
+    error: "Não foi possível buscar o nome da chamada.",
   });
 }

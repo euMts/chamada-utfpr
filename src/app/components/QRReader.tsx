@@ -35,6 +35,7 @@ interface CallNameDebugInfo {
 interface CallNameResponse {
   label?: string;
   debug?: CallNameDebugInfo;
+  error?: string | null;
 }
 
 interface RegisterPresenceResponse {
@@ -94,7 +95,7 @@ export default function QRReader({ onResult }: QRReaderProps) {
           callNameDebug: data.debug ?? null,
           callNameError: data.label?.trim()
             ? null
-            : data.debug?.errorMessage ?? 'Nenhuma tag <label> foi encontrada no HTML retornado.',
+            : data.error ?? data.debug?.errorMessage ?? 'Nenhuma tag <label> foi encontrada no HTML retornado.',
           isLoadingCallName: false,
         };
       });
