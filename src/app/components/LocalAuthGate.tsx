@@ -158,6 +158,15 @@ export default function LocalAuthGate({ children }: LocalAuthGateProps) {
         onSubmit={handleSubmit}
         className="animate-[resultIn_260ms_ease-out] rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
       >
+        <div className="mb-4 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs leading-5 text-sky-900">
+          <p className="font-semibold">Seus dados ficam só no seu navegador.</p>
+          <p className="mt-0.5">
+            Este app <strong>não possui banco de dados</strong>. Suas credenciais são{" "}
+            <strong>criptografadas e salvas localmente</strong> no seu dispositivo (localStorage) e
+            usadas apenas para autenticar no site da chamada.
+          </p>
+        </div>
+
         <div className="space-y-4">
           <div>
             <label htmlFor="username" className="mb-2 block text-sm font-semibold text-slate-800">
