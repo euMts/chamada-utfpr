@@ -20,7 +20,7 @@ interface DetectedQRCode {
 }
 
 interface CallNameDebugInfo {
-  source: 'html-label' | 'error';
+  source: 'html-label' | 'portal-api' | 'error';
   requestedUrl: string;
   idChamada: string | null;
   searchedHtmlInfo: string[];
