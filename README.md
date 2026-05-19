@@ -81,6 +81,8 @@ Use Node.js `22.17.0`. Se estiver usando `nvm`, rode:
 nvm use
 ```
 
+Na Vercel, o override de versão do Node.js é configurado por major version. Por isso, o `package.json` usa `engines.node` como `22.x`, enquanto o `.nvmrc` fixa `22.17.0` para o ambiente local.
+
 Instale as dependências:
 
 ```bash
