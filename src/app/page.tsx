@@ -19,6 +19,15 @@ export default function Home() {
         <LocalAuthGate>
           <QRReader />
         </LocalAuthGate>
+
+        <a
+          href="https://github.com/eumts/chamada-utfpr"
+          target="_blank"
+          rel="noreferrer"
+          className="self-center text-sm font-semibold text-blue-600 hover:text-blue-800"
+        >
+          github.com/eumts/chamada-utfpr
+        </a>
       </div>
       
       <PWAInstaller />

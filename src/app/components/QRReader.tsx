@@ -468,7 +468,7 @@ export default function QRReader({ onResult }: QRReaderProps) {
               </div>
             </div>
             <p className="mt-3 text-xs font-semibold text-green-700">
-              Última detecção: {new Date().toLocaleTimeString()}
+              Última leitura: {new Date().toLocaleTimeString()}
             </p>
             {registrationError && (
               <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 ring-1 ring-red-200">

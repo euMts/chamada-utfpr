@@ -33,8 +33,23 @@ O frontend foi construído com Next.js e roda inteiramente no navegador do usuá
 - `src/app/api/chamada-label/route.ts`: tenta descobrir o nome da chamada a partir da URL lida no QR code.
 - `src/app/api/register-presence/route.ts`: recebe a URL da chamada e as credenciais criptografadas, descriptografa os dados no servidor e envia o POST para registrar a presença.
 
+### Busca do nome da chamada
+
+A rota `src/app/api/chamada-label/route.ts` recebe a URL original lida no QR code e usa essa URL exatamente como ela chegou, sem substituir o host por um domínio fixo. Isso permite que o app funcione tanto com links apontando para a UTFPR quanto com links de um host local ou outro ambiente.
+
+O processo de descoberta do nome segue esta ordem:
+
+1. faz um `GET` na URL completa da chamada usando `curl`;
+2. lê o HTML retornado;
+3. procura primeiro um `<label>` com classe `display-5`, formato usado pela página clássica da chamada;
+4. se esse label não existir, tenta o primeiro `<label>` válido que não seja placeholder como `Portal não encontrado`, `Usuário` ou `Senha`;
+5. se o HTML inicial não tiver um nome válido, consulta a API `/api/portals/{idChamada}` no mesmo host da URL recebida e usa o campo `portal.name`.
+
+Esse fallback cobre páginas renderizadas no cliente, em que o HTML inicial mostra apenas um estado temporário e o nome real do portal é carregado depois via API.
+
 ## Tecnologias
 
+- Node.js 22.17.0
 - Next.js 15
 - React 19
 - TypeScript
@@ -60,6 +75,12 @@ Essa chave é usada para derivar a chave de criptografia das credenciais que fic
 
 ## Como rodar localmente
 
+Use Node.js `22.17.0`. Se estiver usando `nvm`, rode:
+
+```bash
+nvm use
+```
+
 Instale as dependências:
 
 ```bash
@@ -80,7 +101,6 @@ Depois, abra [http://localhost:3000](http://localhost:3000).
 - `npm run build`: gera a build de produção.
 - `npm run start`: inicia a aplicação em produção.
 - `npm run lint`: executa o ESLint.
-- `npm run generate-icons`: gera os ícones do app.
 
 ## Observações
 
